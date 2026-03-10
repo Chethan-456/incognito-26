@@ -7,6 +7,7 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%230a0a08'/%3E%3C!-- skull dome --%3E%3Cellipse cx='16' cy='13' rx='8' ry='7.5' fill='%23c0392b'/%3E%3C!-- cheekbones --%3E%3Crect x='8' y='17' width='16' height='5' rx='1' fill='%23c0392b'/%3E%3C!-- jaw gap --%3E%3Crect x='10' y='19.5' width='3.5' height='4' rx='.5' fill='%230a0a08'/%3E%3Crect x='14.25' y='19.5' width='3.5' height='4' rx='.5' fill='%230a0a08'/%3E%3Crect x='18.5' y='19.5' width='3.5' height='4' rx='.5' fill='%230a0a08'/%3E%3C!-- eye sockets --%3E%3Cellipse cx='12' cy='13' rx='2.8' ry='3' fill='%230a0a08'/%3E%3Cellipse cx='20' cy='13' rx='2.8' ry='3' fill='%230a0a08'/%3E%3C!-- nose --%3E%3Cellipse cx='16' cy='16.5' rx='1.2' ry='1.4' fill='%230a0a08'/%3E%3C!-- crossbones left --%3E%3Cline x1='4' y1='26' x2='13' y2='22' stroke='%23c0392b' stroke-width='2.2' stroke-linecap='round'/%3E%3Ccircle cx='4' cy='26' r='1.6' fill='%23c0392b'/%3E%3Ccircle cx='13' cy='22' r='1.6' fill='%23c0392b'/%3E%3C!-- crossbones right --%3E%3Cline x1='28' y1='26' x2='19' y2='22' stroke='%23c0392b' stroke-width='2.2' stroke-linecap='round'/%3E%3Ccircle cx='28' cy='26' r='1.6' fill='%23c0392b'/%3E%3Ccircle cx='19' cy='22' r='1.6' fill='%23c0392b'/%3E%3C/svg%3E"/>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=VT323&family=Courier+Prime:wght@400;700&family=Special+Elite&display=swap" rel="stylesheet"/>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 :root {
   --noir:#0a0a08;--smoke:#141210;--ash:#1e1c18;--dim:#2a2820;
@@ -174,6 +175,8 @@ td{padding:11px 14px;vertical-align:middle;}
 .mini-table td:last-child{text-align:right;font-family:var(--font-r);font-size:.85rem;color:var(--gold);}
 @media(max-width:900px){.viz-grid{grid-template-columns:1fr 1fr;}}
 @media(max-width:600px){.viz-grid{grid-template-columns:1fr;}}
+.btn-export{background:none;border:1px solid var(--border);color:var(--aged);font-family:var(--font-m);font-size:.6rem;letter-spacing:.12em;padding:8px 14px;cursor:pointer;transition:.2s;display:flex;align-items:center;gap:6px;}
+.btn-export:hover{border-color:var(--green);color:var(--green);}
 </style>
 
 <div class="viz-section">
@@ -248,6 +251,12 @@ td{padding:11px 14px;vertical-align:middle;}
       <option value="paid">PAID ✓</option>
     </select>
     <span class="toolbar__count" id="result-count">0 agents</span>
+    <button class="btn-export" onclick="exportExcel()">
+  <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+    <path d="M8 2v8M5 7l3 3 3-3M3 13h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+  EXPORT
+</button>
     <button class="btn-refresh" id="refresh-btn" onclick="loadData()">
       <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M14 8A6 6 0 1 1 8 2a6 6 0 0 1 4.24 1.76L14 2v4h-4l1.52-1.52A4 4 0 1 0 12 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
       REFRESH
@@ -587,6 +596,36 @@ function renderColleges() {
       <span style="font-size:.62rem;color:var(--paper);letter-spacing:.04em;">${esc(name)}</span>
       <span style="font-family:var(--font-r);font-size:.9rem;color:var(--gold);flex-shrink:0;">${count}</span>
     </div>`).join('');
+}
+function exportExcel() {
+  if (!allRows.length) { showToast('No data to export', 'warn'); return; }
+
+  const rows = allRows.map(r => ({
+    'REG ID':        r.reg_id || '—',
+    'NAME':          r.name || '—',
+    'COLLEGE':       r.college || '—',
+    'PHONE':         r.phone || '—',
+    'EMAIL':         r.email || '—',
+    'EVENT':         r.event || '—',
+    'PAYMENT STATUS': (r.payment_status || 'pending').toUpperCase(),
+    'PAID AT':       r.paid_at ? new Date(r.paid_at).toLocaleString('en-IN') : '—',
+    'REGISTERED AT': r.registered_at ? new Date(r.registered_at).toLocaleString('en-IN') : '—',
+  }));
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+
+  // column widths
+  ws['!cols'] = [
+    {wch:14},{wch:22},{wch:32},{wch:14},{wch:30},
+    {wch:26},{wch:16},{wch:22},{wch:22}
+  ];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Registrations');
+
+  const date = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, `incognito2026_registrations_${date}.xlsx`);
+  showToast('✓ Exported ' + allRows.length + ' registrations', 'ok');
 }
 </script>
 </body>
